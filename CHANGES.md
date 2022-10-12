@@ -1,5 +1,9 @@
 # Changes
 
+## 0.3.0+3.0.1
+
+* Updated to VMA 3.0.1
+
 ## 0.2.3 (Unreleased)
 
 * Removed `Result` return values from functions that always returned `Ok(())`

@@ -1,11 +1,11 @@
 [package]
-name = "vk-mem-erupt"
-version = "0.2.4"
-authors = ["Hindrik Stegenga <mail@hindrik.dev>", "Graham Wihlidal <graham@wihlidal.ca>"]
+name = "vk-mem-3-erupt"
+version = "0.3.0+3.0.1"
+authors = ["Raven Szewczyk <git@eigenraven.me>", "Hindrik Stegenga <mail@hindrik.dev>", "Graham Wihlidal <graham@wihlidal.ca>"]
 description = "Rust ffi bindings and idiomatic wrapper for AMD Vulkan Memory Allocator (VMA) using erupt."
-homepage = "https://github.com/HindrikStegenga/vk-mem-rs"
-repository = "https://github.com/HindrikStegenga/vk-mem-rs"
-documentation = "https://docs.rs/vk-mem-erupt"
+homepage = "https://github.com/eigenraven/vk-mem-3-erupt"
+repository = "https://github.com/eigenraven/vk-mem-3-erupt"
+documentation = "https://docs.rs/vk-mem-3-erupt"
 readme = "README.md"
 keywords = ["vulkan", "vk", "erupt", "memory", "allocator"]
 categories = ["api-bindings", "rendering", "rendering::engine", "rendering::graphics-api", ]
@@ -22,22 +22,22 @@ include = [
     "wrapper/vulkan/vulkan.h",
     "wrapper/vma_lib.cpp",
 ]
-edition = "2018"
+edition = "2021"
 
 [badges]
-travis-ci = { repository = "gwihlidal/vk-mem-rs" }
+# travis-ci = { repository = "gwihlidal/vk-mem-rs" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-erupt = "0.22.0+204"
-bitflags = "1.2.1"
-failure = { version = "0.1.7", optional = true }
+erupt = "0.22.0"
+bitflags = "1.3.2"
+failure = { version = "0.1.8", optional = true }
 
 [build-dependencies]
-cc = "1.0.50"
+cc = "1.0.73"
 
 [build-dependencies.bindgen]
-version = "0.53.2"
+version = "0.60.1"
 optional = true
 
 [profile.release]

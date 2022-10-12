@@ -1,4 +1,4 @@
-vk-mem-erupt
+vk-mem-3-erupt
 ========
 
 **Please make an issue/PR if the crate is out of date and I haven't updated it yet.**
@@ -146,7 +146,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-vk-mem = "0.2.3"
+vk-mem = "0.3.0"
 ```
 
 and add this to your crate root:

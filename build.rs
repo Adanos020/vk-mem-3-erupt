@@ -82,6 +82,7 @@ fn main() {
     } else if target.contains("linux") {
         build
             .flag("-std=c++11")
+            .flag("-Wno-implicit-fallthrough")
             .flag("-Wno-missing-field-initializers")
             .flag("-Wno-unused-variable")
             .flag("-Wno-unused-parameter")
@@ -158,8 +159,9 @@ fn generate_bindings(output_file: &str) {
         .header("vendor/include/vk_mem_alloc.h")
         .rustfmt_bindings(true)
         .size_t_is_usize(true)
-        .blacklist_type("__darwin_.*")
-        .whitelist_function("vma.*")
+        .blocklist_type("__darwin_.*")
+        .blocklist_type("__u?int[0-9]+_t")
+        .allowlist_function("vma.*")
         .trust_clang_mangling(false)
         .layout_tests(false)
         .generate()
