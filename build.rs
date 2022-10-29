@@ -4,6 +4,8 @@ extern crate cc;
 
 use std::env;
 
+use bindgen::callbacks::ParseCallbacks;
+
 fn main() {
     let mut build = cc::Build::new();
 
@@ -152,6 +154,19 @@ fn link_vulkan() {
 #[cfg(not(feature = "link_vulkan"))]
 fn link_vulkan() {}
 
+#[derive(Copy, Clone, Debug)]
+struct BindgenCallbacks;
+
+impl ParseCallbacks for BindgenCallbacks {
+    fn blocklisted_type_implements_trait(
+            &self,
+            name: &str,
+            _derive_trait: bindgen::callbacks::DeriveTrait,
+        ) -> Option<bindgen::callbacks::ImplementsTrait> {
+        Some(bindgen::callbacks::ImplementsTrait::Yes)
+    }
+}
+
 #[cfg(feature = "generate_bindings")]
 fn generate_bindings(output_file: &str) {
     let bindings = bindgen::Builder::default()
@@ -162,8 +177,14 @@ fn generate_bindings(output_file: &str) {
         .blocklist_type("__darwin_.*")
         .blocklist_type("__u?int[0-9]+_t")
         .allowlist_function("vma.*")
+        .allowlist_type("VkDeviceSize")
+        .allowlist_type("Vma.*")
+        .allowlist_var("VMA_.*")
         .trust_clang_mangling(false)
         .layout_tests(false)
+        .parse_callbacks(Box::new(BindgenCallbacks))
+        .derive_debug(true)
+        .derive_default(true)
         .generate()
         .expect("Unable to generate bindings!");
 
