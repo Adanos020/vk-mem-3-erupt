@@ -1003,19 +1003,19 @@ impl Allocator {
                     _,
                     ffi::PFN_vkGetPhysicalDeviceMemoryProperties2KHR,
                 >(
-                    instance.get_physical_device_properties2,
+                    instance.get_physical_device_properties2
                 ),
                 vkGetDeviceBufferMemoryRequirements: mem::transmute::<
                     _,
                     ffi::PFN_vkGetDeviceBufferMemoryRequirements,
                 >(
-                    device.get_device_buffer_memory_requirements,
+                    device.get_device_buffer_memory_requirements
                 ),
                 vkGetDeviceImageMemoryRequirements: mem::transmute::<
                     _,
                     ffi::PFN_vkGetDeviceImageMemoryRequirements,
                 >(
-                    device.get_device_image_memory_requirements,
+                    device.get_device_image_memory_requirements
                 ),
             }
         };
@@ -1067,8 +1067,7 @@ impl Allocator {
     /// The allocator fetches `erupt::vk::PhysicalDeviceMemoryProperties` from the physical device.
     /// You can get it here, without fetching it again on your own.
     pub fn get_memory_properties(&self) -> Result<erupt::vk::PhysicalDeviceMemoryProperties> {
-        let mut ffi_properties: *const ffi::VkPhysicalDeviceMemoryProperties =
-            std::ptr::null();
+        let mut ffi_properties: *const ffi::VkPhysicalDeviceMemoryProperties = std::ptr::null();
         Ok(unsafe {
             ffi::vmaGetMemoryProperties(self.internal, &mut ffi_properties);
             mem::transmute::<
@@ -1349,8 +1348,7 @@ impl Allocator {
             )
         };
         let create_info = allocation_create_info_to_ffi(&allocation_info);
-        let mut allocations: Vec<ffi::VmaAllocation> =
-            vec![std::ptr::null_mut(); allocation_count];
+        let mut allocations: Vec<ffi::VmaAllocation> = vec![std::ptr::null_mut(); allocation_count];
         let mut allocation_info: Vec<ffi::VmaAllocationInfo> =
             vec![Default::default(); allocation_count];
         let result = ffi_to_result(unsafe {

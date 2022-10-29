@@ -159,10 +159,10 @@ struct BindgenCallbacks;
 
 impl ParseCallbacks for BindgenCallbacks {
     fn blocklisted_type_implements_trait(
-            &self,
-            name: &str,
-            _derive_trait: bindgen::callbacks::DeriveTrait,
-        ) -> Option<bindgen::callbacks::ImplementsTrait> {
+        &self,
+        name: &str,
+        _derive_trait: bindgen::callbacks::DeriveTrait,
+    ) -> Option<bindgen::callbacks::ImplementsTrait> {
         Some(bindgen::callbacks::ImplementsTrait::Yes)
     }
 }
