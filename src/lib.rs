@@ -17,13 +17,13 @@ use std::sync::Arc;
 /// Main allocator object
 pub struct Allocator {
     /// Pointer to internal VmaAllocator instance
-    pub(crate) internal: ffi::VmaAllocator,
+    internal: ffi::VmaAllocator,
     /// Vulkan device handle
     #[allow(dead_code)]
-    pub(crate) device: Arc<erupt::DeviceLoader>,
+    device: Arc<erupt::DeviceLoader>,
     /// Vulkan instance handle
     #[allow(dead_code)]
-    pub(crate) instance: Arc<erupt::InstanceLoader>,
+    instance: Arc<erupt::InstanceLoader>,
 }
 
 // Allocator is internally thread safe unless AllocatorCreateFlags::EXTERNALLY_SYNCHRONIZED is used (then you need to add synchronization!)
@@ -37,7 +37,7 @@ unsafe impl Sync for Allocator {}
 #[derive(Debug, Clone)]
 pub struct AllocatorPool {
     /// Pointer to internal VmaPool instance
-    pub(crate) internal: ffi::VmaPool,
+    internal: ffi::VmaPool,
 }
 
 /// Construct `AllocatorPool` with default values
@@ -68,7 +68,7 @@ impl Default for AllocatorPool {
 #[derive(Debug, Copy, Clone)]
 pub struct Allocation {
     /// Pointer to internal VmaAllocation instance
-    pub(crate) internal: ffi::VmaAllocation,
+    internal: ffi::VmaAllocation,
 }
 
 impl Allocation {
@@ -92,7 +92,7 @@ unsafe impl Sync for Allocation {}
 #[derive(Default, Debug, Clone)]
 pub struct AllocationInfo {
     /// Pointer to internal VmaAllocationInfo instance
-    pub(crate) internal: ffi::VmaAllocationInfo,
+    internal: ffi::VmaAllocationInfo,
 }
 
 unsafe impl Send for AllocationInfo {}
@@ -808,94 +808,140 @@ pub struct AllocatorPoolCreateInfo {
     pub min_allocation_alignment: erupt::vk::DeviceSize,
 }
 
-#[derive(Debug)]
-pub struct DefragmentationContext {
-    pub(crate) internal: ffi::VmaDefragmentationContext,
-    pub(crate) stats: Box<ffi::VmaDefragmentationStats>,
-    pub(crate) changed: Vec<erupt::vk::Bool32>,
+bitflags! {
+    /// Flags for configuring the defragmentation process.
+    pub struct DefragmentationFlags: u32 {
+        /// Default configuration for allocation.
+        const NONE = 0x0000_0000;
+
+        /// Use simple but fast algorithm for defragmentation.
+        /// May not achieve best results but will require least time to compute and least allocations to copy.
+        const ALGORITHM_FAST = ffi::VmaDefragmentationFlagBits_VMA_DEFRAGMENTATION_FLAG_ALGORITHM_FAST_BIT;
+        /// Default defragmentation algorithm, applied also when no `ALGORITHM` flag is specified.
+        /// Offers a balance between defragmentation quality and the amount of allocations and bytes that need to be moved.
+        const ALGORITHM_BALANCED = ffi::VmaDefragmentationFlagBits_VMA_DEFRAGMENTATION_FLAG_ALGORITHM_BALANCED_BIT;
+        /// Perform full defragmentation of memory.
+        /// Can result in notably more time to compute and allocations to copy, but will achieve best memory packing.
+        const ALGORITHM_FULL = ffi::VmaDefragmentationFlagBits_VMA_DEFRAGMENTATION_FLAG_ALGORITHM_FULL_BIT;
+        /// Use the most roboust algorithm at the cost of time to compute and number of copies to make.
+        /// Only available when bufferImageGranularity is greater than 1, since it aims to reduce
+        /// alignment issues between different types of resources.
+        /// Otherwise falls back to same behavior as #VMA_DEFRAGMENTATION_FLAG_ALGORITHM_FULL_BIT.
+        const ALGORITHM_EXTENSIVE = ffi::VmaDefragmentationFlagBits_VMA_DEFRAGMENTATION_FLAG_ALGORITHM_EXTENSIVE_BIT;
+
+        /// A bit mask to extract only `ALGORITHM` bits from entire set of flags.
+        const ALGORITHM_MASK = ffi::VmaDefragmentationFlagBits_VMA_DEFRAGMENTATION_FLAG_ALGORITHM_MASK;
+    }
 }
 
-/// Optional configuration parameters to be passed to `Allocator::defragment`
-///
-/// DEPRECATED.
-#[derive(Debug, Copy, Clone)]
-pub struct DefragmentationInfo {
-    /// Maximum total numbers of bytes that can be copied while moving
-    /// allocations to different places.
-    ///
-    /// Default is `erupt::vk::WHOLE_SIZE`, which means no limit.
-    pub max_bytes_to_move: usize,
-
-    /// Maximum number of allocations that can be moved to different place.
-    ///
-    /// Default is `std::u32::MAX`, which means no limit.
-    pub max_allocations_to_move: u32,
-}
-
-/// Construct `DefragmentationInfo` with default values
-impl Default for DefragmentationInfo {
+impl Default for DefragmentationFlags {
     fn default() -> Self {
-        DefragmentationInfo {
-            max_bytes_to_move: erupt::vk::WHOLE_SIZE as usize,
-            max_allocations_to_move: std::u32::MAX,
+        Self::NONE
+    }
+}
+
+/// Operation performed on single defragmentation move.
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DefragmentationMoveOperation {
+    /// Buffer/image has been recreated at `dstTmpAllocation`, data has been copied, old buffer/image has been destroyed. `srcAllocation` should be changed to point to the new place. This is the default value set by vmaBeginDefragmentationPass().
+    Copy = ffi::VmaDefragmentationMoveOperation_VMA_DEFRAGMENTATION_MOVE_OPERATION_COPY,
+    /// Set this value if you cannot move the allocation. New place reserved at `dstTmpAllocation` will be freed. `srcAllocation` will remain unchanged.
+    Ignore = ffi::VmaDefragmentationMoveOperation_VMA_DEFRAGMENTATION_MOVE_OPERATION_IGNORE,
+    /// Set this value if you decide to abandon the allocation and you destroyed the buffer/image. New place reserved at `dstTmpAllocation` will be freed, along with `srcAllocation`, which will be destroyed.
+    Destroy = ffi::VmaDefragmentationMoveOperation_VMA_DEFRAGMENTATION_MOVE_OPERATION_DESTROY,
+}
+
+impl TryFrom<u32> for DefragmentationMoveOperation {
+    type Error = u32;
+
+    fn try_from(value: u32) -> std::result::Result<Self, Self::Error> {
+        if value == Self::Copy as u32 {
+            Ok(Self::Copy)
+        } else if value == Self::Ignore as u32 {
+            Ok(Self::Ignore)
+        } else if value == Self::Destroy as u32 {
+            Ok(Self::Destroy)
+        } else {
+            Err(value)
         }
     }
+}
+
+impl Default for DefragmentationMoveOperation {
+    fn default() -> Self {
+        Self::Ignore
+    }
+}
+
+#[derive(Debug)]
+pub struct DefragmentationContext {
+    internal: ffi::VmaDefragmentationContext,
 }
 
 /// Parameters for defragmentation.
 ///
 /// To be used with function `Allocator::defragmentation_begin`.
 #[derive(Debug, Clone)]
-pub struct DefragmentationInfo2<'a> {
-    /// Collection of allocations that can be defragmented.
-    ///
-    /// Elements in the slice should be unique - same allocation cannot occur twice.
-    /// It is safe to pass allocations that are in the lost state - they are ignored.
-    /// All allocations not present in this slice are considered non-moveable during this defragmentation.
-    pub allocations: &'a [Allocation],
+pub struct DefragmentationInfo {
+    /// See `DefragmentationFlags`
+    pub flags: DefragmentationFlags,
 
-    /// Either `None` or a slice of pools to be defragmented.
+    /// Custom pool to be defragmented.
     ///
-    /// All the allocations in the specified pools can be moved during defragmentation
-    /// and there is no way to check if they were really moved as in `allocations_changed`,
-    /// so you must query all the allocations in all these pools for new `erupt::vk::DeviceMemory`
-    /// and offset using `Allocator::get_allocation_info` if you might need to recreate buffers
-    /// and images bound to them.
-    ///
-    /// Elements in the array should be unique - same pool cannot occur twice.
-    ///
-    /// Using this array is equivalent to specifying all allocations from the pools in `allocations`.
-    /// It might be more efficient.
-    pub pools: Option<&'a [AllocatorPool]>,
+    /// If `None` then default pools will undergo defragmentation process.
+    pub pool: Option<AllocatorPool>,
 
-    /// Maximum total numbers of bytes that can be copied while moving allocations to different places using transfers on CPU side, like `memcpy()`, `memmove()`.
+    /// Maximum numbers of bytes that can be copied during single pass, while moving allocations to different places.
     ///
-    /// `erupt::vk::WHOLE_SIZE` means no limit.
-    pub max_cpu_bytes_to_move: erupt::vk::DeviceSize,
+    /// `0` means no limit.
+    pub max_bytes_per_pass: erupt::vk::DeviceSize,
 
-    /// Maximum number of allocations that can be moved to a different place using transfers on CPU side, like `memcpy()`, `memmove()`.
+    /// Maximum number of allocations that can be moved during single pass to a different place.
     ///
-    /// `std::u32::MAX` means no limit.
-    pub max_cpu_allocations_to_move: u32,
+    /// `0` means no limit.
+    pub max_allocations_per_pass: u32,
+}
 
-    /// Maximum total numbers of bytes that can be copied while moving allocations to different places using transfers on GPU side, posted to `command_buffer`.
+/// Single move of an allocation to be done for defragmentation.
+#[derive(Debug, Clone)]
+pub struct DefragmentationMove {
+    /// Operation to be performed on the allocation by vmaEndDefragmentationPass(). Default value is #VMA_DEFRAGMENTATION_MOVE_OPERATION_COPY. You can modify it.
+    pub operation: DefragmentationMoveOperation,
+    /// Allocation that should be moved.
+    pub src_allocation: Allocation,
+    /// Temporary allocation pointing to destination memory that will replace `srcAllocation`.
     ///
-    /// `erupt::vk::WHOLE_SIZE` means no limit.
-    pub max_gpu_bytes_to_move: erupt::vk::DeviceSize,
+    /// Warning: Do not store this allocation in your data structures! It exists only temporarily, for the duration of the defragmentation pass,
+    /// to be used for binding new buffer/image to the destination memory using e.g. vmaBindBufferMemory().
+    /// vmaEndDefragmentationPass() will destroy it and make `srcAllocation` point to this memory.
+    pub dst_tmp_allocation: Allocation,
+}
 
-    /// Maximum number of allocations that can be moved to a different place using transfers on GPU side, posted to `command_buffer`.
-    ///
-    /// `std::u32::MAX` means no limit.
-    pub max_gpu_allocations_to_move: u32,
+pub enum DefragmentationPassResult {
+    /// No more moves are possible. You can omit call to vmaEndDefragmentationPass() and simply end whole defragmentation.
+    Success,
+    /// There are pending moves returned. You need to perform them, call vmaEndDefragmentationPass(), and then preferably try another pass with vmaBeginDefragmentationPass().
+    Incomplete(DefragmentationPassMoveInfo),
+}
 
-    /// Command buffer where GPU copy commands will be posted.
-    ///
-    /// If not `None`, it must be a valid command buffer handle that supports transfer queue type.
-    /// It must be in the recording state and outside of a render pass instance.
-    /// You need to submit it and make sure it finished execution before calling `Allocator::defragmentation_end`.
-    ///
-    /// Passing `None` means that only CPU defragmentation will be performed.
-    pub command_buffer: Option<erupt::vk::CommandBuffer>,
+/// Parameters for incremental defragmentation steps.
+///
+/// To be used with function `Allocator::defragmentation_begin_pass`.
+#[derive(Debug, Clone)]
+pub struct DefragmentationPassMoveInfo {
+    internal: ffi::VmaDefragmentationPassMoveInfo,
+    moves: Box<[DefragmentationMove]>,
+}
+
+// Slice accessors that prevent changing the array length
+impl DefragmentationPassMoveInfo {
+    pub fn moves(&self) -> &[DefragmentationMove] {
+        &self.moves
+    }
+    pub fn moves_mut(&mut self) -> &mut [DefragmentationMove] {
+        &mut self.moves
+    }
 }
 
 /// Statistics returned by `Allocator::defragment`
@@ -1159,7 +1205,7 @@ impl Allocator {
         memory_type_bits: u32,
         allocation_info: &AllocationCreateInfo,
     ) -> Result<u32> {
-        let create_info = allocation_create_info_to_ffi(&allocation_info);
+        let create_info = allocation_create_info_to_ffi(allocation_info);
         let mut memory_type_index: u32 = 0;
         let result = ffi_to_result(unsafe {
             ffi::vmaFindMemoryTypeIndex(
@@ -1190,7 +1236,7 @@ impl Allocator {
         buffer_info: &erupt::vk::BufferCreateInfo,
         allocation_info: &AllocationCreateInfo,
     ) -> Result<u32> {
-        let allocation_create_info = allocation_create_info_to_ffi(&allocation_info);
+        let allocation_create_info = allocation_create_info_to_ffi(allocation_info);
         let buffer_create_info = unsafe {
             mem::transmute::<erupt::vk::BufferCreateInfo, ffi::VkBufferCreateInfo>(*buffer_info)
         };
@@ -1224,7 +1270,7 @@ impl Allocator {
         image_info: &erupt::vk::ImageCreateInfo,
         allocation_info: &AllocationCreateInfo,
     ) -> Result<u32> {
-        let allocation_create_info = allocation_create_info_to_ffi(&allocation_info);
+        let allocation_create_info = allocation_create_info_to_ffi(allocation_info);
         let image_create_info = unsafe {
             mem::transmute::<erupt::vk::ImageCreateInfo, ffi::VkImageCreateInfo>(*image_info)
         };
@@ -1246,7 +1292,7 @@ impl Allocator {
     /// Allocates Vulkan device memory and creates `AllocatorPool` object.
     pub fn create_pool(&self, pool_info: &AllocatorPoolCreateInfo) -> Result<AllocatorPool> {
         let mut ffi_pool: ffi::VmaPool = std::ptr::null_mut();
-        let create_info = pool_create_info_to_ffi(&pool_info);
+        let create_info = pool_create_info_to_ffi(pool_info);
         let result = ffi_to_result(unsafe {
             ffi::vmaCreatePool(self.internal, &create_info, &mut ffi_pool)
         });
@@ -1309,7 +1355,7 @@ impl Allocator {
                 *memory_requirements,
             )
         };
-        let create_info = allocation_create_info_to_ffi(&allocation_info);
+        let create_info = allocation_create_info_to_ffi(allocation_info);
         let mut allocation: Allocation = Default::default();
         let mut allocation_info: AllocationInfo = Default::default();
         let result = ffi_to_result(unsafe {
@@ -1347,7 +1393,7 @@ impl Allocator {
                 *memory_requirements,
             )
         };
-        let create_info = allocation_create_info_to_ffi(&allocation_info);
+        let create_info = allocation_create_info_to_ffi(allocation_info);
         let mut allocations: Vec<ffi::VmaAllocation> = vec![std::ptr::null_mut(); allocation_count];
         let mut allocation_info: Vec<ffi::VmaAllocationInfo> =
             vec![Default::default(); allocation_count];
@@ -1387,7 +1433,7 @@ impl Allocator {
         allocation_info: &AllocationCreateInfo,
     ) -> Result<(Allocation, AllocationInfo)> {
         let ffi_buffer = buffer.object_handle() as ffi::VkBuffer;
-        let create_info = allocation_create_info_to_ffi(&allocation_info);
+        let create_info = allocation_create_info_to_ffi(allocation_info);
         let mut allocation: Allocation = Default::default();
         let mut allocation_info: AllocationInfo = Default::default();
         let result = ffi_to_result(unsafe {
@@ -1414,7 +1460,7 @@ impl Allocator {
         allocation_info: &AllocationCreateInfo,
     ) -> Result<(Allocation, AllocationInfo)> {
         let ffi_image = image.object_handle() as ffi::VkImage;
-        let create_info = allocation_create_info_to_ffi(&allocation_info);
+        let create_info = allocation_create_info_to_ffi(allocation_info);
         let mut allocation: Allocation = Default::default();
         let mut allocation_info: AllocationInfo = Default::default();
         let result = ffi_to_result(unsafe {
@@ -1487,6 +1533,8 @@ impl Allocator {
     }
 
     /// Sets user data in given allocation to new value.
+    ///
+    /// # Safety
     ///
     /// If the allocation was created with `AllocationCreateFlags::USER_DATA_COPY_STRING`,
     /// `user_data` must be either null, or pointer to a null-terminated string. The function
@@ -1642,45 +1690,109 @@ impl Allocator {
     ///
     /// - If `info.command_buffer` is not null, you must submit that command buffer
     /// and make sure it finished execution before calling `Allocator::defragmentation_end`.
-    pub fn defragmentation_begin(
+    /**
+    Interleaved allocations and deallocations of many objects of varying size can
+    cause fragmentation over time, which can lead to a situation where the library is unable
+    to find a continuous range of free memory for a new allocation despite there is
+    enough free space, just scattered across many small free ranges between existing
+    allocations.
+
+    To mitigate this problem, you can use defragmentation feature.
+    It doesn't happen automatically though and needs your cooperation,
+    because VMA is a low level library that only allocates memory.
+    It cannot recreate buffers and images in a new place as it doesn't remember the contents of `VkBufferCreateInfo` / `VkImageCreateInfo` structures.
+    It cannot copy their contents as it doesn't record any commands to a command buffer.
+
+    Although functions like vmaCreateBuffer(), vmaCreateImage(), vmaDestroyBuffer(), vmaDestroyImage()
+    create/destroy an allocation and a buffer/image at once, these are just a shortcut for
+    creating the resource, allocating memory, and binding them together.
+    Defragmentation works on memory allocations only. You must handle the rest manually.
+    Defragmentation is an iterative process that should repreat "passes" as long as related functions
+    return `VK_INCOMPLETE` not `VK_SUCCESS`.
+    In each pass:
+
+    1. vmaBeginDefragmentationPass() function call:
+        - Calculates and returns the list of allocations to be moved in this pass.
+            Note this can be a time-consuming process.
+        - Reserves destination memory for them by creating temporary destination allocations
+            that you can query for their `VkDeviceMemory` + offset using vmaGetAllocationInfo().
+    2. Inside the pass, **you should**:
+        - Inspect the returned list of allocations to be moved.
+        - Create new buffers/images and bind them at the returned destination temporary allocations.
+        - Copy data from source to destination resources if necessary.
+        - Destroy the source buffers/images, but NOT their allocations.
+    3. vmaEndDefragmentationPass() function call:
+        - Frees the source memory reserved for the allocations that are moved.
+        - Modifies source #VmaAllocation objects that are moved to point to the destination reserved memory.
+        - Frees `VkDeviceMemory` blocks that became empty.
+
+    Unlike in previous iterations of the defragmentation API, there is no list of "movable" allocations passed as a parameter.
+    Defragmentation algorithm tries to move all suitable allocations.
+    You can, however, refuse to move some of them inside a defragmentation pass, by setting
+    `pass.pMoves[i].operation` to #VMA_DEFRAGMENTATION_MOVE_OPERATION_IGNORE.
+    This is not recommended and may result in suboptimal packing of the allocations after defragmentation.
+    If you cannot ensure any allocation can be moved, it is better to keep movable allocations separate in a custom pool.
+
+    Inside a pass, for each allocation that should be moved:
+
+    - You should copy its data from the source to the destination place by calling e.g. `vkCmdCopyBuffer()`, `vkCmdCopyImage()`.
+    - You need to make sure these commands finished executing before destroying the source buffers/images and before calling vmaEndDefragmentationPass().
+    - If a resource doesn't contain any meaningful data, e.g. it is a transient color attachment image to be cleared,
+    filled, and used temporarily in each rendering frame, you can just recreate this image
+    without copying its data.
+    - If the resource is in `HOST_VISIBLE` and `HOST_CACHED` memory, you can copy its data on the CPU
+    using `memcpy()`.
+    - If you cannot move the allocation, you can set `pass.pMoves[i].operation` to #VMA_DEFRAGMENTATION_MOVE_OPERATION_IGNORE.
+    This will cancel the move.
+    - vmaEndDefragmentationPass() will then free the destination memory
+        not the source memory of the allocation, leaving it unchanged.
+    - If you decide the allocation is unimportant and can be destroyed instead of moved (e.g. it wasn't used for long time),
+    you can set `pass.pMoves[i].operation` to #VMA_DEFRAGMENTATION_MOVE_OPERATION_DESTROY.
+    - vmaEndDefragmentationPass() will then free both source and destination memory, and will destroy the source #VmaAllocation object.
+
+    You can defragment a specific custom pool by setting VmaDefragmentationInfo::pool
+    (like in the example above) or all the default pools by setting this member to null.
+
+    Defragmentation is always performed in each pool separately.
+    Allocations are never moved between different Vulkan memory types.
+    The size of the destination memory reserved for a moved allocation is the same as the original one.
+    Alignment of an allocation as it was determined using `vkGetBufferMemoryRequirements()` etc. is also respected after defragmentation.
+    Buffers/images should be recreated with the same `VkBufferCreateInfo` / `VkImageCreateInfo` parameters as the original ones.
+
+    You can perform the defragmentation incrementally to limit the number of allocations and bytes to be moved
+    in each pass, e.g. to call it in sync with render frames and not to experience too big hitches.
+    See members: VmaDefragmentationInfo::maxBytesPerPass, VmaDefragmentationInfo::maxAllocationsPerPass.
+
+    It is also safe to perform the defragmentation asynchronously to render frames and other Vulkan and VMA
+    usage, possibly from multiple threads, with the exception that allocations
+    returned in VmaDefragmentationPassMoveInfo::pMoves shouldn't be destroyed until the defragmentation pass is ended.
+
+    *Mapping* is preserved on allocations that are moved during defragmentation.
+    Whether through #VMA_ALLOCATION_CREATE_MAPPED_BIT or vmaMapMemory(), the allocations
+    are mapped at their new place. Of course, pointer to the mapped data changes, so it needs to be queried
+    using VmaAllocationInfo::pMappedData.
+
+    Note: Defragmentation is not supported in custom pools created with #VMA_POOL_CREATE_LINEAR_ALGORITHM_BIT.
+     */
+    pub fn begin_defragmentation(
         &self,
-        info: &DefragmentationInfo2,
+        info: &DefragmentationInfo,
     ) -> Result<DefragmentationContext> {
-        let command_buffer = match info.command_buffer {
-            Some(command_buffer) => command_buffer,
-            None => erupt::vk::CommandBuffer::null(),
-        };
-        let mut pools: Vec<ffi::VmaPool> = match info.pools {
-            Some(ref pools) => pools.iter().map(|pool| pool.internal).collect(),
-            None => Vec::new(),
-        };
-        let mut allocations: Vec<ffi::VmaAllocation> =
-            info.allocations.iter().map(|x| x.internal).collect();
         let mut context = DefragmentationContext {
             internal: std::ptr::null_mut(),
-            stats: Box::new(Default::default()),
-            changed: vec![erupt::vk::FALSE; allocations.len()],
         };
         let ffi_info = ffi::VmaDefragmentationInfo {
-            flags: 0, // Reserved for future use
-            allocationCount: info.allocations.len() as u32,
-            pAllocations: allocations.as_mut_ptr(),
-            pAllocationsChanged: context.changed.as_mut_ptr(),
-            poolCount: pools.len() as u32,
-            pPools: pools.as_mut_ptr(),
-            maxCpuBytesToMove: info.max_cpu_bytes_to_move,
-            maxCpuAllocationsToMove: info.max_cpu_allocations_to_move,
-            maxGpuBytesToMove: info.max_gpu_bytes_to_move,
-            maxGpuAllocationsToMove: info.max_gpu_allocations_to_move,
-            commandBuffer: command_buffer.object_handle() as ffi::VkCommandBuffer,
+            flags: info.flags.bits(),
+            pool: info
+                .pool
+                .as_ref()
+                .map(|p| p.internal)
+                .unwrap_or(std::ptr::null_mut()),
+            maxBytesPerPass: info.max_bytes_per_pass,
+            maxAllocationsPerPass: info.max_allocations_per_pass,
         };
         let result = ffi_to_result(unsafe {
-            ffi::vmaBeginDefragmentation(
-                self.internal,
-                &ffi_info,
-                &mut *context.stats,
-                &mut context.internal,
-            )
+            ffi::vmaBeginDefragmentation(self.internal, &ffi_info, &mut context.internal)
         });
         match result {
             erupt::vk::Result::SUCCESS => Ok(context),
@@ -1688,122 +1800,95 @@ impl Allocator {
         }
     }
 
-    /// Ends defragmentation process.
-    ///
-    /// Use this function to finish defragmentation started by `Allocator::defragmentation_begin`.
-    pub fn defragmentation_end(
+    /// Starts single defragmentation pass.
+    pub fn begin_defragmentation_pass(
         &self,
         context: &mut DefragmentationContext,
-    ) -> Result<(DefragmentationStats, Vec<bool>)> {
-        let result =
-            ffi_to_result(unsafe { ffi::vmaEndDefragmentation(self.internal, context.internal) });
-        let changed: Vec<bool> = context.changed.iter().map(|change| *change == 1).collect();
+    ) -> Result<DefragmentationPassResult> {
+        let mut ffi_moves = ffi::VmaDefragmentationPassMoveInfo::default();
+        let result = ffi_to_result(unsafe {
+            ffi::vmaBeginDefragmentationPass(self.internal, context.internal, &mut ffi_moves)
+        });
         match result {
-            erupt::vk::Result::SUCCESS => Ok((
-                DefragmentationStats {
-                    bytes_moved: context.stats.bytesMoved as usize,
-                    bytes_freed: context.stats.bytesFreed as usize,
-                    allocations_moved: context.stats.allocationsMoved,
-                    device_memory_blocks_freed: context.stats.deviceMemoryBlocksFreed,
-                },
-                changed,
-            )),
-            _ => Err(Error::vulkan(result)),
+            erupt::vk::Result::INCOMPLETE => {
+                let mut moves = Vec::with_capacity(ffi_moves.moveCount as usize);
+                for i in 0..ffi_moves.moveCount as usize {
+                    let ffi_move: ffi::VmaDefragmentationMove =
+                        unsafe { std::ptr::read(ffi_moves.pMoves.add(i)) };
+                    moves.push(DefragmentationMove {
+                        operation: ffi_move.operation.try_into().unwrap(),
+                        src_allocation: Allocation {
+                            internal: ffi_move.srcAllocation,
+                        },
+                        dst_tmp_allocation: Allocation {
+                            internal: ffi_move.dstTmpAllocation,
+                        },
+                    })
+                }
+                Ok(DefragmentationPassResult::Incomplete(
+                    DefragmentationPassMoveInfo {
+                        internal: ffi_moves,
+                        moves: moves.into(),
+                    },
+                ))
+            }
+            erupt::vk::Result::SUCCESS => Ok(DefragmentationPassResult::Success),
+            error => Err(Error::vulkan(error)),
         }
     }
 
-    /// Compacts memory by moving allocations.
+    /// Ends single defragmentation pass.
+    /// Returns true if no more moves are possible, or false if more defragmentations are possible.
+    /// Ends incremental defragmentation pass and commits all defragmentation moves from pPassInfo. After this call:
     ///
-    /// `allocations` is a slice of allocations that can be moved during this compaction.
-    /// `defrag_info` optional configuration parameters.
-    /// Returns statistics from the defragmentation, and an associated array to `allocations`
-    /// which indicates which allocations were changed (if any).
+    ///    - Allocations at moves[i].srcAllocation that had moves[i].operation == Copy (which is the default) will be pointing to the new destination place.
+    ///    - Allocation at moves[i].srcAllocation that had moves[i].operation == Destroy will be freed.
     ///
-    /// Possible error values:
-    ///
-    /// - `erupt::vk::Result::INCOMPLETE` if succeeded but didn't make all possible optimizations because limits specified in
-    ///   `defrag_info` have been reached, negative error code in case of error.
-    ///
-    /// This function works by moving allocations to different places (different
-    /// `erupt::vk::DeviceMemory` objects and/or different offsets) in order to optimize memory
-    /// usage. Only allocations that are in `allocations` slice can be moved. All other
-    /// allocations are considered nonmovable in this call. Basic rules:
-    ///
-    /// - Only allocations made in memory types that have
-    ///   `erupt::vk::MemoryPropertyFlags::HOST_VISIBLE` and `erupt::vk::MemoryPropertyFlags::HOST_COHERENT`
-    ///   flags can be compacted. You may pass other allocations but it makes no sense -
-    ///   these will never be moved.
-    ///
-    /// - Custom pools created with `AllocatorPoolCreateFlags::LINEAR_ALGORITHM` or `AllocatorPoolCreateFlags::BUDDY_ALGORITHM` flag are not
-    ///   defragmented. Allocations passed to this function that come from such pools are ignored.
-    ///
-    /// - Allocations created with `AllocationCreateFlags::DEDICATED_MEMORY` or created as dedicated allocations for any
-    ///   other reason are also ignored.
-    ///
-    /// - Both allocations made with or without `AllocationCreateFlags::MAPPED` flag can be compacted. If not persistently
-    ///   mapped, memory will be mapped temporarily inside this function if needed.
-    ///
-    /// - You must not pass same `allocation` object multiple times in `allocations` slice.
-    ///
-    /// The function also frees empty `erupt::vk::DeviceMemory` blocks.
-    ///
-    /// Warning: This function may be time-consuming, so you shouldn't call it too often
-    /// (like after every resource creation/destruction).
-    /// You can call it on special occasions (like when reloading a game level or
-    /// when you just destroyed a lot of objects). Calling it every frame may be OK, but
-    /// you should measure that on your platform.
-    #[deprecated(
-        since = "0.1.3",
-        note = "This is a part of the old interface. It is recommended to use structure `DefragmentationInfo2` and function `Allocator::defragmentation_begin` instead."
-    )]
-    pub fn defragment(
+    /// If no more moves are possible you can end whole defragmentation.
+    pub fn end_defragmentation_pass(
         &self,
-        allocations: &[Allocation],
-        defrag_info: Option<&DefragmentationInfo>,
-    ) -> Result<(DefragmentationStats, Vec<bool>)> {
-        let mut ffi_allocations: Vec<ffi::VmaAllocation> = allocations
-            .iter()
-            .map(|allocation| allocation.internal)
-            .collect();
-        let mut ffi_change_list: Vec<ffi::VkBool32> = vec![0; ffi_allocations.len()];
-        let ffi_info = match defrag_info {
-            Some(info) => ffi::VmaDefragmentationInfo {
-                maxBytesToMove: info.max_bytes_to_move as ffi::VkDeviceSize,
-                maxAllocationsToMove: info.max_allocations_to_move,
-            },
-            None => ffi::VmaDefragmentationInfo {
-                maxBytesToMove: erupt::vk::WHOLE_SIZE,
-                maxAllocationsToMove: std::u32::MAX,
-            },
-        };
-        let mut ffi_stats: ffi::VmaDefragmentationStats = std::ptr::null();
-        let result = ffi_to_result(unsafe {
-            ffi::vmaDefragment(
-                self.internal,
-                ffi_allocations.as_mut_ptr(),
-                ffi_allocations.len(),
-                ffi_change_list.as_mut_ptr(),
-                &ffi_info,
-                &mut ffi_stats,
-            )
-        });
-        match result {
-            erupt::vk::Result::SUCCESS => {
-                let change_list: Vec<bool> = ffi_change_list
-                    .iter()
-                    .map(|change| *change == erupt::vk::TRUE)
-                    .collect();
-                Ok((
-                    DefragmentationStats {
-                        bytes_moved: ffi_stats.bytesMoved as usize,
-                        bytes_freed: ffi_stats.bytesFreed as usize,
-                        allocations_moved: ffi_stats.allocationsMoved,
-                        device_memory_blocks_freed: ffi_stats.deviceMemoryBlocksFreed,
-                    },
-                    change_list,
-                ))
+        context: &mut DefragmentationContext,
+        moves: &mut DefragmentationPassMoveInfo,
+    ) -> Result<bool> {
+        for (i, mov) in moves.moves.iter().enumerate() {
+            unsafe {
+                let ffi_mov = moves.internal.pMoves.add(i);
+                std::ptr::addr_of_mut!((*ffi_mov).operation)
+                    .write(mov.operation as ffi::VmaDefragmentationMoveOperation);
             }
-            _ => Err(Error::vulkan(result)),
+        }
+        let result = ffi_to_result(unsafe {
+            ffi::vmaEndDefragmentationPass(self.internal, context.internal, &mut moves.internal)
+        });
+        if !(result == erupt::vk::Result::SUCCESS || result == erupt::vk::Result::INCOMPLETE) {
+            return Err(Error::vulkan(result));
+        }
+        for (i, mov) in moves.moves.iter_mut().enumerate() {
+            unsafe {
+                let ffi_mov = moves.internal.pMoves.add(i);
+                mov.src_allocation.internal =
+                    std::ptr::addr_of_mut!((*ffi_mov).srcAllocation).read();
+            }
+        }
+        Ok(result == erupt::vk::Result::SUCCESS)
+    }
+
+    /// Ends defragmentation process.
+    ///
+    /// Use this function to finish defragmentation started by `Allocator::begin_defragmentation`.
+    pub fn end_defragmentation(
+        &self,
+        context: &mut DefragmentationContext,
+    ) -> DefragmentationStats {
+        let mut ffi_stats = ffi::VmaDefragmentationStats::default();
+        unsafe {
+            ffi::vmaEndDefragmentation(self.internal, context.internal, &mut ffi_stats);
+        }
+        DefragmentationStats {
+            bytes_moved: ffi_stats.bytesMoved as usize,
+            bytes_freed: ffi_stats.bytesFreed as usize,
+            allocations_moved: ffi_stats.allocationsMoved,
+            device_memory_blocks_freed: ffi_stats.deviceMemoryBlocksFreed,
         }
     }
 
@@ -1890,7 +1975,7 @@ impl Allocator {
         let buffer_create_info = unsafe {
             mem::transmute::<erupt::vk::BufferCreateInfo, ffi::VkBufferCreateInfo>(*buffer_info)
         };
-        let allocation_create_info = allocation_create_info_to_ffi(&allocation_info);
+        let allocation_create_info = allocation_create_info_to_ffi(allocation_info);
         let mut buffer: ffi::VkBuffer = std::ptr::null_mut();
         let mut allocation: Allocation = Default::default();
         let mut allocation_info: AllocationInfo = Default::default();
@@ -1959,7 +2044,7 @@ impl Allocator {
         let image_create_info = unsafe {
             mem::transmute::<erupt::vk::ImageCreateInfo, ffi::VkImageCreateInfo>(*image_info)
         };
-        let allocation_create_info = allocation_create_info_to_ffi(&allocation_info);
+        let allocation_create_info = allocation_create_info_to_ffi(allocation_info);
         let mut image: ffi::VkImage = std::ptr::null_mut();
         let mut allocation: Allocation = Default::default();
         let mut allocation_info: AllocationInfo = Default::default();

@@ -4,8 +4,6 @@ extern crate cc;
 
 use std::env;
 
-use bindgen::callbacks::ParseCallbacks;
-
 fn main() {
     let mut build = cc::Build::new();
 
@@ -52,6 +50,7 @@ fn main() {
         build
             .flag("-std=c++11")
             .flag("-Wno-missing-field-initializers")
+            .flag("-Wno-parentheses")
             .flag("-Wno-unused-variable")
             .flag("-Wno-unused-parameter")
             .flag("-Wno-unused-private-field")
@@ -64,6 +63,7 @@ fn main() {
         build
             .flag("-std=c++11")
             .flag("-Wno-missing-field-initializers")
+            .flag("-Wno-parentheses")
             .flag("-Wno-unused-variable")
             .flag("-Wno-unused-parameter")
             .flag("-Wno-unused-private-field")
@@ -75,6 +75,7 @@ fn main() {
         build
             .flag("-std=c++11")
             .flag("-Wno-missing-field-initializers")
+            .flag("-Wno-parentheses")
             .flag("-Wno-unused-variable")
             .flag("-Wno-unused-parameter")
             .flag("-Wno-unused-private-field")
@@ -86,6 +87,7 @@ fn main() {
             .flag("-std=c++11")
             .flag("-Wno-implicit-fallthrough")
             .flag("-Wno-missing-field-initializers")
+            .flag("-Wno-parentheses")
             .flag("-Wno-unused-variable")
             .flag("-Wno-unused-parameter")
             .flag("-Wno-unused-private-field")
@@ -96,6 +98,7 @@ fn main() {
         build
             .flag("-std=c++11")
             .flag("-Wno-missing-field-initializers")
+            .flag("-Wno-parentheses")
             .flag("-Wno-unused-variable")
             .flag("-Wno-unused-parameter")
             .flag("-Wno-unused-private-field")
@@ -132,43 +135,42 @@ fn link_vulkan() {
         }
 
         println!("cargo:rustc-link-lib=dylib=vulkan-1");
-    } else {
-        if target.contains("apple") {
-            if let Ok(vulkan_sdk) = env::var("VULKAN_SDK") {
-                let mut vulkan_sdk_path = PathBuf::from(vulkan_sdk);
-                vulkan_sdk_path.push("macOS/lib");
-                println!(
-                    "cargo:rustc-link-search=native={}",
-                    vulkan_sdk_path.to_str().unwrap()
-                );
-            } else {
-                let lib_path = "wrapper/macOS/lib";
-                println!("cargo:rustc-link-search=native={}", lib_path);
-            }
-
-            println!("cargo:rustc-link-lib=dylib=vulkan");
+    } else if target.contains("apple") {
+        if let Ok(vulkan_sdk) = env::var("VULKAN_SDK") {
+            let mut vulkan_sdk_path = PathBuf::from(vulkan_sdk);
+            vulkan_sdk_path.push("macOS/lib");
+            println!(
+                "cargo:rustc-link-search=native={}",
+                vulkan_sdk_path.to_str().unwrap()
+            );
+        } else {
+            let lib_path = "wrapper/macOS/lib";
+            println!("cargo:rustc-link-search=native={}", lib_path);
         }
+
+        println!("cargo:rustc-link-lib=dylib=vulkan");
     }
 }
 
 #[cfg(not(feature = "link_vulkan"))]
 fn link_vulkan() {}
 
-#[derive(Copy, Clone, Debug)]
-struct BindgenCallbacks;
-
-impl ParseCallbacks for BindgenCallbacks {
-    fn blocklisted_type_implements_trait(
-        &self,
-        name: &str,
-        _derive_trait: bindgen::callbacks::DeriveTrait,
-    ) -> Option<bindgen::callbacks::ImplementsTrait> {
-        Some(bindgen::callbacks::ImplementsTrait::Yes)
-    }
-}
-
 #[cfg(feature = "generate_bindings")]
 fn generate_bindings(output_file: &str) {
+    use bindgen::callbacks::ParseCallbacks;
+    #[derive(Copy, Clone, Debug)]
+    struct BindgenCallbacks;
+
+    impl ParseCallbacks for BindgenCallbacks {
+        fn blocklisted_type_implements_trait(
+            &self,
+            _name: &str,
+            _derive_trait: bindgen::callbacks::DeriveTrait,
+        ) -> Option<bindgen::callbacks::ImplementsTrait> {
+            Some(bindgen::callbacks::ImplementsTrait::Yes)
+        }
+    }
+
     let bindings = bindgen::Builder::default()
         .clang_arg("-I./wrapper")
         .header("vendor/include/vk_mem_alloc.h")
