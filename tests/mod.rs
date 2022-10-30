@@ -1,13 +1,12 @@
 extern crate erupt;
-extern crate vk_mem_erupt;
+extern crate vk_mem_3_erupt;
 
-use erupt::extensions::ext_debug_report::*;
 //use std::os::raw::{c_char, c_void};
 use erupt::DeviceLoader;
 use std::sync::Arc;
 
 fn extension_names() -> Vec<*const i8> {
-    vec![EXT_DEBUG_REPORT_EXTENSION_NAME, erupt::extensions::khr_get_physical_device_properties2::KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME]
+    vec![]
 }
 
 // unsafe extern "system" fn vulkan_debug_callback(
@@ -51,7 +50,7 @@ impl TestHarness {
             .application_version(0)
             .engine_name(&app_name)
             .engine_version(0)
-            .api_version(erupt::vk::make_api_version(0, 1, 0, 0));
+            .api_version(erupt::vk::API_VERSION_1_3);
 
         let layer_names = [::std::ffi::CString::new("VK_LAYER_KHRONOS_validation").unwrap()];
         let layers_names_raw: Vec<*const i8> = layer_names
@@ -67,7 +66,7 @@ impl TestHarness {
 
         let entry = erupt::EntryLoader::new().unwrap();
         let instance: erupt::InstanceLoader = unsafe {
-            erupt::InstanceLoader::new(&entry, &create_info, None).expect("Instance creation error")
+            erupt::InstanceLoader::new(&entry, &create_info).expect("Instance creation error")
         };
 
         // let debug_info = erupt::vk::DebugReportCallbackCreateInfoEXT::builder()
@@ -94,16 +93,15 @@ impl TestHarness {
         let (physical_device, queue_family_index) = unsafe {
             physical_devices
                 .iter()
-                .map(|physical_device| {
+                .filter_map(|physical_device| {
                     instance
                         .get_physical_device_queue_family_properties(*physical_device, None)
                         .iter()
                         .enumerate()
-                        .filter_map(|(index, _)| Some((*physical_device, index)))
-                        .nth(0)
+                        .map(|(index, _)| (*physical_device, index))
+                        .next()
                 })
-                .filter_map(|v| v)
-                .nth(0)
+                .next()
                 .expect("Couldn't find suitable device.")
         };
 
@@ -113,19 +111,11 @@ impl TestHarness {
             .queue_family_index(queue_family_index as u32)
             .queue_priorities(&priorities)];
 
-        let layer_names = [::std::ffi::CString::new("VK_KHR_portability_subset").unwrap()];
-        let layers_names_raw: Vec<*const i8> = layer_names
-            .iter()
-            .map(|raw_name| raw_name.as_ptr())
-            .collect();
-
         let device_create_info = erupt::vk::DeviceCreateInfoBuilder::new()
-            .queue_create_infos(&queue_info)
-            .enabled_extension_names(&layers_names_raw);
+            .queue_create_infos(&queue_info);
 
-        let device: erupt::DeviceLoader = unsafe {
-            DeviceLoader::new(&instance, physical_device, &device_create_info, None).unwrap()
-        };
+        let device: erupt::DeviceLoader =
+            unsafe { DeviceLoader::new(&instance, physical_device, &device_create_info).unwrap() };
 
         TestHarness {
             entry,
@@ -137,17 +127,23 @@ impl TestHarness {
         }
     }
 
-    pub fn create_allocator(&self) -> vk_mem_erupt::Allocator {
-        let create_info = vk_mem_erupt::AllocatorCreateInfo {
+    pub fn create_allocator(&self) -> vk_mem_3_erupt::Allocator {
+        let create_info = vk_mem_3_erupt::AllocatorCreateInfo {
             physical_device: self.physical_device,
             device: Arc::clone(&self.device),
             instance: Arc::clone(&self.instance),
             flags: Default::default(),
             preferred_large_heap_block_size: 0,
-            frame_in_use_count: 0,
             heap_size_limits: None,
+            vulkan_api_version: erupt::vk::API_VERSION_1_3,
         };
-        vk_mem_erupt::Allocator::new(&create_info).unwrap()
+        vk_mem_3_erupt::Allocator::new(&create_info).unwrap()
+    }
+}
+
+impl Default for TestHarness {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -164,15 +160,15 @@ fn create_allocator() {
 
 // #[test]
 // fn default_allocator_create_info() {
-//     //let _ = vk_mem_erupt::AllocatorCreateInfo;
+//     //let _ = vk_mem_3_erupt::AllocatorCreateInfo;
 // }
 
 #[test]
 fn create_gpu_buffer() {
     let harness = TestHarness::new();
     let allocator = harness.create_allocator();
-    let allocation_info = vk_mem_erupt::AllocationCreateInfo {
-        usage: vk_mem_erupt::MemoryUsage::GpuOnly,
+    let allocation_info = vk_mem_3_erupt::AllocationCreateInfo {
+        usage: vk_mem_3_erupt::MemoryUsage::GpuOnly,
         ..Default::default()
     };
     let (buffer, allocation, allocation_info) = allocator
@@ -194,11 +190,11 @@ fn create_gpu_buffer() {
 fn create_cpu_buffer_preferred() {
     let harness = TestHarness::new();
     let allocator = harness.create_allocator();
-    let allocation_info = vk_mem_erupt::AllocationCreateInfo {
+    let allocation_info = vk_mem_3_erupt::AllocationCreateInfo {
         required_flags: erupt::vk::MemoryPropertyFlags::HOST_VISIBLE,
         preferred_flags: erupt::vk::MemoryPropertyFlags::HOST_COHERENT
             | erupt::vk::MemoryPropertyFlags::HOST_CACHED,
-        flags: vk_mem_erupt::AllocationCreateFlags::MAPPED,
+        flags: vk_mem_3_erupt::AllocationCreateFlags::MAPPED,
         ..Default::default()
     };
     let (buffer, allocation, allocation_info) = allocator
@@ -227,11 +223,11 @@ fn create_gpu_buffer_pool() {
             erupt::vk::BufferUsageFlags::UNIFORM_BUFFER | erupt::vk::BufferUsageFlags::TRANSFER_DST,
         );
 
-    let mut allocation_info = vk_mem_erupt::AllocationCreateInfo {
+    let mut allocation_info = vk_mem_3_erupt::AllocationCreateInfo {
         required_flags: erupt::vk::MemoryPropertyFlags::HOST_VISIBLE,
         preferred_flags: erupt::vk::MemoryPropertyFlags::HOST_COHERENT
             | erupt::vk::MemoryPropertyFlags::HOST_CACHED,
-        flags: vk_mem_erupt::AllocationCreateFlags::MAPPED,
+        flags: vk_mem_3_erupt::AllocationCreateFlags::MAPPED,
         ..Default::default()
     };
 
@@ -240,7 +236,7 @@ fn create_gpu_buffer_pool() {
         .unwrap();
 
     // Create a pool that can have at most 2 blocks, 128 MiB each.
-    let pool_info = vk_mem_erupt::AllocatorPoolCreateInfo {
+    let pool_info = vk_mem_3_erupt::AllocatorPoolCreateInfo {
         memory_type_index,
         block_size: 128 * 1024 * 1024,
         max_block_count: 2,
@@ -261,15 +257,15 @@ fn create_gpu_buffer_pool() {
 fn test_gpu_stats() {
     let harness = TestHarness::new();
     let allocator = harness.create_allocator();
-    let allocation_info = vk_mem_erupt::AllocationCreateInfo {
-        usage: vk_mem_erupt::MemoryUsage::GpuOnly,
+    let allocation_info = vk_mem_3_erupt::AllocationCreateInfo {
+        usage: vk_mem_3_erupt::MemoryUsage::GpuOnly,
         ..Default::default()
     };
 
-    let stats_1 = allocator.calculate_stats().unwrap();
-    assert_eq!(stats_1.total.blockCount, 0);
-    assert_eq!(stats_1.total.allocationCount, 0);
-    assert_eq!(stats_1.total.usedBytes, 0);
+    let stats_1 = allocator.calculate_statistics().unwrap();
+    assert_eq!(stats_1.total.statistics.blockCount, 0);
+    assert_eq!(stats_1.total.statistics.allocationCount, 0);
+    assert_eq!(stats_1.total.statistics.allocationBytes, 0);
 
     let (buffer, allocation, _allocation_info) = allocator
         .create_buffer(
@@ -283,30 +279,30 @@ fn test_gpu_stats() {
         )
         .unwrap();
 
-    let stats_2 = allocator.calculate_stats().unwrap();
-    assert_eq!(stats_2.total.blockCount, 1);
-    assert_eq!(stats_2.total.allocationCount, 1);
-    assert_eq!(stats_2.total.usedBytes, 16 * 1024);
+    let stats_2 = allocator.calculate_statistics().unwrap();
+    assert_eq!(stats_2.total.statistics.blockCount, 1);
+    assert_eq!(stats_2.total.statistics.allocationCount, 1);
+    assert_eq!(stats_2.total.statistics.allocationBytes, 16 * 1024);
 
     allocator.destroy_buffer(buffer, &allocation);
 
-    let stats_3 = allocator.calculate_stats().unwrap();
-    assert_eq!(stats_3.total.blockCount, 1);
-    assert_eq!(stats_3.total.allocationCount, 0);
-    assert_eq!(stats_3.total.usedBytes, 0);
+    let stats_3 = allocator.calculate_statistics().unwrap();
+    assert_eq!(stats_3.total.statistics.blockCount, 1);
+    assert_eq!(stats_3.total.statistics.allocationCount, 0);
+    assert_eq!(stats_3.total.statistics.allocationBytes, 0);
 }
 
 #[test]
 fn test_stats_string() {
     let harness = TestHarness::new();
     let allocator = harness.create_allocator();
-    let allocation_info = vk_mem_erupt::AllocationCreateInfo {
-        usage: vk_mem_erupt::MemoryUsage::GpuOnly,
+    let allocation_info = vk_mem_3_erupt::AllocationCreateInfo {
+        usage: vk_mem_3_erupt::MemoryUsage::GpuOnly,
         ..Default::default()
     };
 
     let stats_1 = allocator.build_stats_string(true).unwrap();
-    assert!(stats_1.len() > 0);
+    assert!(!stats_1.is_empty());
 
     let (buffer, allocation, _allocation_info) = allocator
         .create_buffer(
@@ -321,13 +317,13 @@ fn test_stats_string() {
         .unwrap();
 
     let stats_2 = allocator.build_stats_string(true).unwrap();
-    assert!(stats_2.len() > 0);
+    assert!(!stats_2.is_empty());
     assert_ne!(stats_1, stats_2);
 
     allocator.destroy_buffer(buffer, &allocation);
 
     let stats_3 = allocator.build_stats_string(true).unwrap();
-    assert!(stats_3.len() > 0);
+    assert!(!stats_3.is_empty());
     assert_ne!(stats_3, stats_1);
     assert_ne!(stats_3, stats_2);
 }
