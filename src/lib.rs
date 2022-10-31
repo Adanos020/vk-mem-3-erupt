@@ -305,6 +305,12 @@ pub struct AllocatorCreateInfo {
     /// Set to 0 to use default, which is currently 256 MiB.
     pub preferred_large_heap_block_size: usize,
 
+    /// Custom CPU memory allocation callbacks. Optional. Will be used for all CPU-side allocations.
+    pub allocation_callbacks: Option<erupt::vk::AllocationCallbacks>,
+
+    /// Informative callbacks for `vkAllocateMemory`, `vkFreeMemory`. Optional.
+    pub device_memory_callbacks: Option<ffi::VmaDeviceMemoryCallbacks>,
+
     /// Either empty or an array of limits on maximum number of bytes that can be allocated
     /// out of particular Vulkan memory heap.
     ///
@@ -1076,8 +1082,18 @@ impl Allocator {
                 Some(limits) => limits.as_ptr(),
             },
             pVulkanFunctions: &routed_functions,
-            pAllocationCallbacks: ::std::ptr::null(), // TODO: Add support
-            pDeviceMemoryCallbacks: ::std::ptr::null(), // TODO: Add support
+            // Safety: identical structs with repr(C) layouts
+            pAllocationCallbacks: if let Some(cbs) = create_info.allocation_callbacks.as_ref() {
+                unsafe { std::mem::transmute(cbs as *const _) }
+            } else {
+                std::ptr::null()
+            },
+            pDeviceMemoryCallbacks: if let Some(cbs) = create_info.device_memory_callbacks.as_ref()
+            {
+                cbs as *const _
+            } else {
+                std::ptr::null()
+            },
             vulkanApiVersion: create_info.vulkan_api_version,
             pTypeExternalMemoryHandleTypes: ::std::ptr::null(), // TODO: Make configurable
         };

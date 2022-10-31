@@ -111,8 +111,8 @@ impl TestHarness {
             .queue_family_index(queue_family_index as u32)
             .queue_priorities(&priorities)];
 
-        let device_create_info = erupt::vk::DeviceCreateInfoBuilder::new()
-            .queue_create_infos(&queue_info);
+        let device_create_info =
+            erupt::vk::DeviceCreateInfoBuilder::new().queue_create_infos(&queue_info);
 
         let device: erupt::DeviceLoader =
             unsafe { DeviceLoader::new(&instance, physical_device, &device_create_info).unwrap() };
@@ -136,6 +136,8 @@ impl TestHarness {
             preferred_large_heap_block_size: 0,
             heap_size_limits: None,
             vulkan_api_version: erupt::vk::API_VERSION_1_3,
+            allocation_callbacks: None,
+            device_memory_callbacks: None,
         };
         vk_mem_3_erupt::Allocator::new(&create_info).unwrap()
     }
