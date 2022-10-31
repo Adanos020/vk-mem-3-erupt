@@ -1,5 +1,9 @@
 # Changes
 
+## 0.4.0+3.0.1
+
+* Breaking: Added support for allocation callbacks
+
 ## 0.3.0+3.0.1
 
 * Updated to VMA 3.0.1

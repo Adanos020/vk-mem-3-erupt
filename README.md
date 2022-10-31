@@ -4,10 +4,9 @@ vk-mem-3-erupt
 **Please make an issue/PR if the crate is out of date and I haven't updated it yet.**
 
 
-[![vk-mem on travis-ci.com](https://travis-ci.com/gwihlidal/vk-mem-rs.svg?branch=master)](https://travis-ci.com/gwihlidal/vk-mem-rs)
-[![Latest version](https://img.shields.io/crates/v/vk-mem.svg)](https://crates.io/crates/vk-mem)
-[![Documentation](https://docs.rs/vk-mem/badge.svg)](https://docs.rs/vk-mem)
-[![Lines of Code](https://tokei.rs/b1/github/gwihlidal/vk-mem-rs)](https://github.com/gwihlidal/vk-mem-rs)
+[![Latest version](https://img.shields.io/crates/v/vk-mem-3-erupt.svg)](https://crates.io/crates/vk-mem-3-erupt)
+[![Documentation](https://docs.rs/vk-mem-3-erupt/badge.svg)](https://docs.rs/vk-mem-3-erupt)
+[![Lines of Code](https://tokei.rs/b1/github/eigenraven/vk-mem-3-erupt/)](https://github.com/eigenraven/vk-mem-3-erupt/)
 ![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![APACHE2](https://img.shields.io/badge/license-APACHE2-blue.svg)
 
@@ -19,12 +18,12 @@ All work on this crate is therefore performed by Graham Wihlidal and the team be
 
 This crate provides an FFI layer and idiomatic rust wrappers for the excellent AMD Vulkan Memory Allocator (VMA) C/C++ library.
 
-- [Documentation](https://docs.rs/vk-mem)
-- [Release Notes](https://github.com/gwihlidal/vk-mem-rs/releases)
+- [Documentation](https://docs.rs/vk-mem-3-erupt)
+- [Release Notes](CHANGES.md)
 - [VMA GitHub](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
 - [VMA Documentation](https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/)
 - [GPU Open Announce](https://gpuopen.com/gaming-product/vulkan-memory-allocator/)
-- [GPU Open Update](https://gpuopen.com/vulkan-memory-allocator-2-3-0/)
+- [GPU Open Update](https://gpuopen.com/learn/announcing-vma3-d3d12ma2/)
 
 ## Problem
 
@@ -76,8 +75,6 @@ Additional features:
   - Support for persistently mapped memory; just allocate with appropriate flag and you get access to mapped pointer.
 - Support for defragmenting allocations:
   - Call one function and let the library move data around to free some memory blocks and make your allocations better compacted.
-- Support for lost allocations:
-  - Allocate memory with appropriate flags and let the library remove allocations that are not used for many frames to make room for new ones.
 - Support for non-coherent memory and flushing allocations:
   - `nonCoherentAtomSize` is respected automatically.
 - Supporting for attempting to detect incorrect mapped memory usage:
@@ -146,7 +143,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-vk-mem = "0.3.0"
+vk-mem-3-erupt = "0.4.0"
 ```
 
 and add this to your crate root:
@@ -196,7 +193,7 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
 be dual licensed as above, without any additional terms or conditions.
 
-Contributions are always welcome; please look at the [issue tracker](https://github.com/gwihlidal/vk-mem-rs/issues) to see what known improvements are documented.
+Contributions are always welcome; please look at the [issue tracker](https://github.com/eigenraven/vk-mem-3-erupt//issues) to see what known improvements are documented.
 
 ## Code of Conduct
 
