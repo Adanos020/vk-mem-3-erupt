@@ -37,7 +37,7 @@ failure = { version = "0.1.8", optional = true }
 cc = "1.0.73"
 
 [build-dependencies.bindgen]
-version = "0.61.0"
+version = "0.64.0"
 optional = true
 
 [profile.release]
