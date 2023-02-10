@@ -11,6 +11,7 @@ extern crate failure;
 pub mod error;
 pub mod ffi;
 pub use crate::error::{Error, ErrorKind, Result};
+use erupt::ObjectHandle;
 use std::mem;
 use std::sync::Arc;
 
@@ -1072,9 +1073,9 @@ impl Allocator {
             }
         };
         let ffi_create_info = ffi::VmaAllocatorCreateInfo {
-            physicalDevice: create_info.physical_device.object_handle() as ffi::VkPhysicalDevice,
-            device: create_info.device.handle.object_handle() as ffi::VkDevice,
-            instance: instance.handle.object_handle() as ffi::VkInstance,
+            physicalDevice: create_info.physical_device.to_raw() as ffi::VkPhysicalDevice,
+            device: create_info.device.handle.to_raw() as ffi::VkDevice,
+            instance: instance.handle.to_raw() as ffi::VkInstance,
             flags: create_info.flags.bits(),
             preferredLargeHeapBlockSize: create_info.preferred_large_heap_block_size as u64,
             pHeapSizeLimit: match &create_info.heap_size_limits {
@@ -1448,7 +1449,7 @@ impl Allocator {
         buffer: erupt::vk::Buffer,
         allocation_info: &AllocationCreateInfo,
     ) -> Result<(Allocation, AllocationInfo)> {
-        let ffi_buffer = buffer.object_handle() as ffi::VkBuffer;
+        let ffi_buffer = buffer.to_raw() as ffi::VkBuffer;
         let create_info = allocation_create_info_to_ffi(allocation_info);
         let mut allocation: Allocation = Default::default();
         let mut allocation_info: AllocationInfo = Default::default();
@@ -1475,7 +1476,7 @@ impl Allocator {
         image: erupt::vk::Image,
         allocation_info: &AllocationCreateInfo,
     ) -> Result<(Allocation, AllocationInfo)> {
-        let ffi_image = image.object_handle() as ffi::VkImage;
+        let ffi_image = image.to_raw() as ffi::VkImage;
         let create_info = allocation_create_info_to_ffi(allocation_info);
         let mut allocation: Allocation = Default::default();
         let mut allocation_info: AllocationInfo = Default::default();
@@ -1930,7 +1931,7 @@ impl Allocator {
             ffi::vmaBindBufferMemory(
                 self.internal,
                 allocation.internal,
-                buffer.object_handle() as ffi::VkBuffer,
+                buffer.to_raw() as ffi::VkBuffer,
             )
         });
         match result {
@@ -1961,7 +1962,7 @@ impl Allocator {
             ffi::vmaBindImageMemory(
                 self.internal,
                 allocation.internal,
-                image.object_handle() as ffi::VkImage,
+                image.to_raw() as ffi::VkImage,
             )
         });
         match result {
@@ -2029,7 +2030,7 @@ impl Allocator {
         unsafe {
             ffi::vmaDestroyBuffer(
                 self.internal,
-                buffer.object_handle() as ffi::VkBuffer,
+                buffer.to_raw() as ffi::VkBuffer,
                 allocation.internal,
             );
         }
@@ -2096,7 +2097,7 @@ impl Allocator {
         unsafe {
             ffi::vmaDestroyImage(
                 self.internal,
-                image.object_handle() as ffi::VkImage,
+                image.to_raw() as ffi::VkImage,
                 allocation.internal,
             );
         }
